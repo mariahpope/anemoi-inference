@@ -8,6 +8,7 @@
 # nor does it submit to any jurisdiction.
 
 
+import json
 import logging
 from copy import deepcopy
 
@@ -16,17 +17,28 @@ from . import Command
 LOG = logging.getLogger(__name__)
 
 
-def _same_supporting_arrays(a, b):
-    import numpy as np
+def diff(original, patched):
+    def _diff(a, b, *path):
+        if isinstance(a, dict) and isinstance(b, dict):
+            for key in set(a) | set(b):
+                if key in a and key in b:
+                    _diff(a[key], b[key], *path, key)
+                else:
+                    LOG.info(f"Missing key {'.'.join(list(path) + [key])}")
+            return
 
-    if set(a) != set(b):
-        return False
+        if isinstance(a, list) and isinstance(b, list):
+            if len(a) != len(b):
+                LOG.info(f"Length mismatch {'.'.join(path)}")
+                return
+            for i, value in enumerate(a):
+                _diff(value, b[i], *path, str(i))
+            return
 
-    for k, v in a.items():
-        if np.any(v != b[k]):
-            return False
+        if a != b:
+            LOG.info(f"{path} = {a} -> {b}")
 
-    return True
+    _diff(original, patched)
 
 
 class PatchCmd(Command):
@@ -37,6 +49,7 @@ class PatchCmd(Command):
 
     def add_arguments(self, command_parser):
         command_parser.add_argument("path", help="Path to the checkpoint.")
+        command_parser.add_argument("--constants", help="--constants=z,lsm,slor,sdor")
 
     def run(self, args):
         from anemoi.utils.checkpoints import load_metadata
@@ -53,13 +66,19 @@ class PatchCmd(Command):
         # Patch the metadata
         while True:
             previous = deepcopy(metadata)
-            metadata, supporting_arrays = Metadata(metadata).patch_metadata(supporting_arrays, root)
+            metadata, supporting_arrays = Metadata(metadata).patch_metadata(supporting_arrays, root, args.constants)
             if metadata == previous:
                 break
             LOG.info("Metadata patched")
 
+        # Normalize the metadata
+        metadata = json.loads(json.dumps(metadata))
+
         if metadata != original_metadata:
             LOG.info("Patching metadata")
+            LOG.info("Diff:")
+            diff(original_metadata, metadata)
+            LOG.info("----")
             assert "sources" in metadata["dataset"]
             replace_metadata(args.path, metadata, supporting_arrays)
 

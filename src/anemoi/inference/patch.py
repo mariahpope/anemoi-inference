@@ -33,19 +33,40 @@ class PatchMixin:
 
     # `self` is a `Metadata` object
 
-    def patch_metadata(self, supporting_arrays, root):
+    def patch_metadata(self, supporting_arrays, root, constants=None):
         dataset = self._metadata["dataset"]
 
         if (
             "variable_metadata" not in dataset
             or "supporting_arrays_paths" not in dataset
             or "sources" not in dataset
-            or not not self._supporting_arrays
+            or not self._supporting_arrays
+            or "constant_fields" not in dataset
         ):
             self._patch_variable_metadata()
             self._supporting_arrays = self._patch_supporting_arrays(supporting_arrays, root)
+            self._patch_constant_fields(constants)
 
         return self._metadata, self._supporting_arrays
+
+    def _patch_constant_fields(self, constants):
+        if constants is None:
+            return
+
+        if constants.startswith("+"):
+            dataset = self._metadata["dataset"]
+            dataset.setdefault("constant_fields", [])
+            dataset["constant_fields"] = sorted(set(dataset["constant_fields"]) + set(constants[1:].split(",")))
+            return
+
+        if constants.startswith("-"):
+            dataset = self._metadata["dataset"]
+            dataset.setdefault("constant_fields", [])
+            dataset["constant_fields"] = sorted(set(dataset["constant_fields"]) - set(constants[1:].split(",")))
+            return
+
+        dataset = self._metadata["dataset"]
+        dataset["constant_fields"] = constants.split(",")
 
     def _patch_variable_metadata(self):
 
