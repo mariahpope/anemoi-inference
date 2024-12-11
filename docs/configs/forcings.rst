@@ -19,7 +19,7 @@ This example above is a shortcut for:
 
 .. literalinclude:: forcings_2.yaml
 
-You can also specify different sources for each forcing.
+You can also specify different sources for each forcing:
 
 This is to get the initial constant forcings from a file:
 
